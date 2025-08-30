@@ -1389,7 +1389,7 @@ public:
             std::cout << "1. Запустить все тесты" << std::endl;
             std::cout << "2. Демонстрация операций" << std::endl;
             std::cout << "3. Тест производительности" << std::endl;
-            
+            std::cout << "4. Показать информацию о реализации" << std::endl;
             std::cout << "0. Выход" << std::endl;
             std::cout << "Выбор: ";
             std::cin >> choice;
@@ -1403,6 +1403,18 @@ public:
                     break;
                 case 3:
                     demoPerformance();
+                    break;
+                case 4:
+                    std::cout << "\n=== ИНФОРМАЦИЯ О РЕАЛИЗАЦИИ ===" << std::endl;
+                    std::cout << "АТД Динамический массив: ✓" << std::endl;
+                    std::cout << "АТД Связный список: ✓" << std::endl;
+                    std::cout << "АТД Последовательность: ✓" << std::endl;
+                    std::cout << "АТД Очередь: ✓" << std::endl;
+                    std::cout << "Поддержка типов: int, double, Complex, string, Person, FunctionPtr" << std::endl;
+                    std::cout << "Операции: Map, Where, Reduce, Concat, Zip, Split, Slice" << std::endl;
+                    std::cout << "Обработка ошибок: ✓" << std::endl;
+                    std::cout << "Модульные тесты: ✓" << std::endl;
+                    std::cout << "Пользовательский интерфейс: ✓" << std::endl;
                     break;
             }
         } while (choice != 0);
