@@ -80,6 +80,185 @@ public:
     virtual std::unique_ptr<IIterator<T>> CreateIterator() const = 0;
 };
 
+// ==================== DYNAMIC ARRAY ====================
+template <class T>
+class DynamicArray : public IEnumerable<T> {
+private:
+    T* items;
+    int size;
+    int capacity;
+
+    void resize(int newCapacity) {
+        T* newItems = new T[newCapacity];
+        for (int i = 0; i < size; i++) {
+            newItems[i] = items[i];
+        }
+        delete[] items;
+        items = newItems;
+        capacity = newCapacity;
+    }
+
+public:
+    class Iterator : public IIterator<T> {
+    private:
+        const DynamicArray<T>& array;
+        int currentIndex;
+
+    public:
+        Iterator(const DynamicArray<T>& arr) : array(arr), currentIndex(0) {}
+        
+        bool HasNext() const override {
+            return currentIndex < array.GetSize();
+        }
+        
+        T Next() override {
+            if (!HasNext()) throw IndexOutOfRange();
+            return array.Get(currentIndex++);
+        }
+        
+        void Reset() override {
+            currentIndex = 0;
+        }
+    };
+
+    DynamicArray() : size(0), capacity(10) {
+        items = new T[capacity];
+    }
+
+    DynamicArray(int size) : size(size), capacity(size * 2 + 1) {
+        if (size < 0) throw std::invalid_argument("Size cannot be negative");
+        items = new T[capacity];
+    }
+
+    DynamicArray(T* items, int count) : size(count), capacity(count * 2 + 1) {
+        if (count < 0) throw std::invalid_argument("Count cannot be negative");
+        this->items = new T[capacity];
+        for (int i = 0; i < count; i++) {
+            this->items[i] = items[i];
+        }
+    }
+
+    DynamicArray(const DynamicArray<T>& other) : size(other.size), capacity(other.capacity) {
+        items = new T[capacity];
+        for (int i = 0; i < size; i++) {
+            items[i] = other.items[i];
+        }
+    }
+
+    DynamicArray(std::initializer_list<T> initList) : size(initList.size()), capacity(initList.size() * 2 + 1) {
+        items = new T[capacity];
+        int i = 0;
+        for (const auto& item : initList) {
+            items[i++] = item;
+        }
+    }
+
+    ~DynamicArray() {
+        delete[] items;
+    }
+
+    std::unique_ptr<IIterator<T>> CreateIterator() const override {
+        return std::make_unique<Iterator>(*this);
+    }
+
+    T Get(int index) const {
+        if (index < 0 || index >= size) throw IndexOutOfRange();
+        return items[index];
+    }
+
+    T& operator[](int index) {
+        if (index < 0 || index >= size) throw IndexOutOfRange();
+        return items[index];
+    }
+
+    const T& operator[](int index) const {
+        if (index < 0 || index >= size) throw IndexOutOfRange();
+        return items[index];
+    }
+
+    int GetSize() const { return size; }
+    int GetCapacity() const { return capacity; }
+
+    void Set(int index, T value) {
+        if (index < 0 || index >= size) throw IndexOutOfRange();
+        items[index] = value;
+    }
+
+    void Append(T item) {
+        if (size >= capacity) {
+            resize(capacity * 2);
+        }
+        items[size++] = item;
+    }
+
+    void Prepend(T item) {
+        InsertAt(item, 0);
+    }
+
+    void InsertAt(T item, int index) {
+        if (index < 0 || index > size) throw IndexOutOfRange();
+        
+        if (size >= capacity) {
+            resize(capacity * 2);
+        }
+        
+        for (int i = size; i > index; i--) {
+            items[i] = items[i - 1];
+        }
+        items[index] = item;
+        size++;
+    }
+
+    T RemoveAt(int index) {
+        if (index < 0 || index >= size) throw IndexOutOfRange();
+        
+        T removed = items[index];
+        for (int i = index; i < size - 1; i++) {
+            items[i] = items[i + 1];
+        }
+        size--;
+        
+        if (size < capacity / 4 && capacity > 10) {
+            resize(capacity / 2);
+        }
+        
+        return removed;
+    }
+
+    DynamicArray<T>* GetSubArray(int startIndex, int endIndex) const {
+        if (startIndex < 0 || endIndex >= size || startIndex > endIndex) 
+            throw IndexOutOfRange();
+        
+        int subSize = endIndex - startIndex + 1;
+        DynamicArray<T>* subArray = new DynamicArray<T>(subSize);
+        for (int i = 0; i < subSize; i++) {
+            subArray->items[i] = items[startIndex + i];
+        }
+        subArray->size = subSize;
+        return subArray;
+    }
+
+    DynamicArray<T>* Concat(const DynamicArray<T>* other) const {
+        DynamicArray<T>* result = new DynamicArray<T>(size + other->size);
+        for (int i = 0; i < size; i++) {
+            result->Append(items[i]);
+        }
+        for (int i = 0; i < other->size; i++) {
+            result->Append(other->items[i]);
+        }
+        return result;
+    }
+
+    void Print() const {
+        std::cout << "[";
+        for (int i = 0; i < size; i++) {
+            std::cout << items[i];
+            if (i < size - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+    }
+};
+
 // ==================== LINKED LIST NODE ====================
 template <class T>
 class LinkedListNode {
@@ -103,9 +282,10 @@ public:
     class Iterator : public IIterator<T> {
     private:
         LinkedListNode<T>* current;
+        LinkedListNode<T>* start;
 
     public:
-        Iterator(LinkedListNode<T>* start) : current(start) {}
+        Iterator(LinkedListNode<T>* startNode) : current(startNode), start(startNode) {}
         
         bool HasNext() const override {
             return current != nullptr;
@@ -119,7 +299,7 @@ public:
         }
         
         void Reset() override {
-            // Reset not supported for linked list iterator
+            current = start;
         }
     };
 
@@ -299,161 +479,6 @@ public:
     }
 };
 
-// ==================== DYNAMIC ARRAY ====================
-template <class T>
-class DynamicArray : public IEnumerable<T> {
-private:
-    T* items;
-    int size;
-    int capacity;
-
-    void resize(int newCapacity) {
-        T* newItems = new T[newCapacity];
-        for (int i = 0; i < size; i++) {
-            newItems[i] = items[i];
-        }
-        delete[] items;
-        items = newItems;
-        capacity = newCapacity;
-    }
-
-public:
-    class Iterator : public IIterator<T> {
-    private:
-        const DynamicArray<T>& array;
-        int currentIndex;
-
-    public:
-        Iterator(const DynamicArray<T>& arr) : array(arr), currentIndex(0) {}
-        
-        bool HasNext() const override {
-            return currentIndex < array.GetSize();
-        }
-        
-        T Next() override {
-            if (!HasNext()) throw IndexOutOfRange();
-            return array.Get(currentIndex++);
-        }
-        
-        void Reset() override {
-            currentIndex = 0;
-        }
-    };
-
-    DynamicArray() : size(0), capacity(10) {
-        items = new T[capacity];
-    }
-
-    DynamicArray(int size) : size(size), capacity(size * 2 + 1) {
-        if (size < 0) throw std::invalid_argument("Size cannot be negative");
-        items = new T[capacity];
-    }
-
-    DynamicArray(T* items, int count) : size(count), capacity(count * 2 + 1) {
-        if (count < 0) throw std::invalid_argument("Count cannot be negative");
-        this->items = new T[capacity];
-        for (int i = 0; i < count; i++) {
-            this->items[i] = items[i];
-        }
-    }
-
-    DynamicArray(const DynamicArray<T>& other) : size(other.size), capacity(other.capacity) {
-        items = new T[capacity];
-        for (int i = 0; i < size; i++) {
-            items[i] = other.items[i];
-        }
-    }
-
-    DynamicArray(std::initializer_list<T> initList) : size(initList.size()), capacity(initList.size() * 2 + 1) {
-        items = new T[capacity];
-        int i = 0;
-        for (const auto& item : initList) {
-            items[i++] = item;
-        }
-    }
-
-    ~DynamicArray() {
-        delete[] items;
-    }
-
-    std::unique_ptr<IIterator<T>> CreateIterator() const override {
-        return std::make_unique<Iterator>(*this);
-    }
-
-    T Get(int index) const {
-        if (index < 0 || index >= size) throw IndexOutOfRange();
-        return items[index];
-    }
-
-    T& operator[](int index) {
-        if (index < 0 || index >= size) throw IndexOutOfRange();
-        return items[index];
-    }
-
-    const T& operator[](int index) const {
-        if (index < 0 || index >= size) throw IndexOutOfRange();
-        return items[index];
-    }
-
-    int GetSize() const { return size; }
-    int GetCapacity() const { return capacity; }
-
-    void Set(int index, T value) {
-        if (index < 0 || index >= size) throw IndexOutOfRange();
-        items[index] = value;
-    }
-
-    void Append(T item) {
-        if (size >= capacity) {
-            resize(capacity * 2);
-        }
-        items[size++] = item;
-    }
-
-    void Prepend(T item) {
-        InsertAt(item, 0);
-    }
-
-    void InsertAt(T item, int index) {
-        if (index < 0 || index > size) throw IndexOutOfRange();
-        
-        if (size >= capacity) {
-            resize(capacity * 2);
-        }
-        
-        for (int i = size; i > index; i--) {
-            items[i] = items[i - 1];
-        }
-        items[index] = item;
-        size++;
-    }
-
-    T RemoveAt(int index) {
-        if (index < 0 || index >= size) throw IndexOutOfRange();
-        
-        T removed = items[index];
-        for (int i = index; i < size - 1; i++) {
-            items[i] = items[i + 1];
-        }
-        size--;
-        
-        if (size < capacity / 4 && capacity > 10) {
-            resize(capacity / 2);
-        }
-        
-        return removed;
-    }
-
-    void Print() const {
-        std::cout << "[";
-        for (int i = 0; i < size; i++) {
-            std::cout << items[i];
-            if (i < size - 1) std::cout << ", ";
-        }
-        std::cout << "]" << std::endl;
-    }
-};
-
 // ==================== SEQUENCE INTERFACE ====================
 template <class T>
 class Sequence : public IEnumerable<T> {
@@ -487,20 +512,20 @@ public:
     virtual Sequence<T>* Clone() const = 0;
 };
 
-// ==================== ARRAY SEQUENCE ====================
+// ==================== BASE ARRAY SEQUENCE ====================
 template <class T>
-class ArraySequence : public Sequence<T> {
+class BaseArraySequence : public Sequence<T> {
 protected:
     DynamicArray<T> array;
 
 public:
     class Iterator : public IIterator<T> {
     private:
-        const ArraySequence<T>& sequence;
+        const BaseArraySequence<T>& sequence;
         int currentIndex;
 
     public:
-        Iterator(const ArraySequence<T>& seq) : sequence(seq), currentIndex(0) {}
+        Iterator(const BaseArraySequence<T>& seq) : sequence(seq), currentIndex(0) {}
         
         bool HasNext() const override {
             return currentIndex < sequence.GetLength();
@@ -516,57 +541,70 @@ public:
         }
     };
 
-    ArraySequence() : array() {}
-    ArraySequence(const DynamicArray<T>& arr) : array(arr) {}
-    ArraySequence(T* items, int count) : array(items, count) {}
-    ArraySequence(std::initializer_list<T> initList) : array(initList) {}
-    ArraySequence(const ArraySequence<T>& other) : array(other.array) {}
+    BaseArraySequence() : array() {}
+    BaseArraySequence(const DynamicArray<T>& arr) : array(arr) {}
+    BaseArraySequence(T* items, int count) : array(items, count) {}
+    BaseArraySequence(std::initializer_list<T> initList) : array(initList) {}
+    BaseArraySequence(const BaseArraySequence<T>& other) : array(other.array) {}
 
     std::unique_ptr<IIterator<T>> CreateIterator() const override {
         return std::make_unique<Iterator>(*this);
     }
 
-    T GetFirst() const override { return array.Get(0); }
-    T GetLast() const override { return array.Get(array.GetSize() - 1); }
-    T Get(int index) const override { return array.Get(index); }
-    int GetLength() const override { return array.GetSize(); }
+    T GetFirst() const override {
+        if (array.GetSize() == 0) throw EmptySequenceException();
+        return array.Get(0);
+    }
 
-    ArraySequence<T>* Append(T item) const override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>(*this);
+    T GetLast() const override {
+        if (array.GetSize() == 0) throw EmptySequenceException();
+        return array.Get(array.GetSize() - 1);
+    }
+
+    T Get(int index) const override {
+        return array.Get(index);
+    }
+
+    int GetLength() const override {
+        return array.GetSize();
+    }
+
+    BaseArraySequence<T>* Append(T item) const override {
+        BaseArraySequence<T>* newSequence = new BaseArraySequence<T>(*this);
         newSequence->array.Append(item);
         return newSequence;
     }
 
-    ArraySequence<T>* Prepend(T item) const override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>(*this);
+    BaseArraySequence<T>* Prepend(T item) const override {
+        BaseArraySequence<T>* newSequence = new BaseArraySequence<T>(*this);
         newSequence->array.Prepend(item);
         return newSequence;
     }
 
-    ArraySequence<T>* InsertAt(T item, int index) const override {
-        ArraySequence<T>* newSequence = new ArraySequence<T>(*this);
+    BaseArraySequence<T>* InsertAt(T item, int index) const override {
+        BaseArraySequence<T>* newSequence = new BaseArraySequence<T>(*this);
         newSequence->array.InsertAt(item, index);
         return newSequence;
     }
 
-    ArraySequence<T>* GetSubsequence(int startIndex, int endIndex) const override {
-        ArraySequence<T>* result = new ArraySequence<T>();
+    BaseArraySequence<T>* GetSubsequence(int startIndex, int endIndex) const override {
+        BaseArraySequence<T>* result = new BaseArraySequence<T>();
         for (int i = startIndex; i <= endIndex; i++) {
             result->array.Append(array.Get(i));
         }
         return result;
     }
 
-    ArraySequence<T>* Map(std::function<T(T)> func) const override {
-        ArraySequence<T>* result = new ArraySequence<T>();
+    BaseArraySequence<T>* Map(std::function<T(T)> func) const override {
+        BaseArraySequence<T>* result = new BaseArraySequence<T>();
         for (int i = 0; i < array.GetSize(); i++) {
             result->array.Append(func(array.Get(i)));
         }
         return result;
     }
 
-    ArraySequence<T>* Where(std::function<bool(T)> predicate) const override {
-        ArraySequence<T>* result = new ArraySequence<T>();
+    BaseArraySequence<T>* Where(std::function<bool(T)> predicate) const override {
+        BaseArraySequence<T>* result = new BaseArraySequence<T>();
         for (int i = 0; i < array.GetSize(); i++) {
             T item = array.Get(i);
             if (predicate(item)) {
@@ -584,8 +622,8 @@ public:
         return result;
     }
 
-    ArraySequence<T>* Zip(const Sequence<T>* other, std::function<T(T, T)> func) const override {
-        ArraySequence<T>* result = new ArraySequence<T>();
+    BaseArraySequence<T>* Zip(const Sequence<T>* other, std::function<T(T, T)> func) const override {
+        BaseArraySequence<T>* result = new BaseArraySequence<T>();
         int minLength = std::min(array.GetSize(), other->GetLength());
         for (int i = 0; i < minLength; i++) {
             result->array.Append(func(array.Get(i), other->Get(i)));
@@ -593,8 +631,8 @@ public:
         return result;
     }
 
-    ArraySequence<T>* Slice(int startIndex, int deleteCount, const Sequence<T>* insertSequence = nullptr) const override {
-        ArraySequence<T>* result = new ArraySequence<T>(*this);
+    BaseArraySequence<T>* Slice(int startIndex, int deleteCount, const Sequence<T>* insertSequence = nullptr) const override {
+        BaseArraySequence<T>* result = new BaseArraySequence<T>(*this);
         
         if (startIndex < 0) startIndex = array.GetSize() + startIndex;
         if (startIndex < 0 || startIndex >= array.GetSize()) throw IndexOutOfRange();
@@ -637,166 +675,130 @@ public:
         return Option<T>::None();
     }
 
-    void Print() const override { array.Print(); }
-    T operator[](int index) const override { return array.Get(index); }
-    Sequence<T>* Clone() const override { return new ArraySequence<T>(*this); }
+    void Print() const override {
+        array.Print();
+    }
+
+    T operator[](int index) const override {
+        return array.Get(index);
+    }
+
+    Sequence<T>* Clone() const override {
+        return new BaseArraySequence<T>(*this);
+    }
 };
 
-// ==================== LIST SEQUENCE ====================
+// ==================== MUTABLE ARRAY SEQUENCE ====================
 template <class T>
-class ListSequence : public Sequence<T> {
-protected:
-    LinkedList<T> list;
-
+class MutableArraySequence : public BaseArraySequence<T> {
 public:
-    class Iterator : public IIterator<T> {
-    private:
-        const ListSequence<T>& sequence;
-        int currentIndex;
+    using BaseArraySequence<T>::BaseArraySequence;
 
-    public:
-        Iterator(const ListSequence<T>& seq) : sequence(seq), currentIndex(0) {}
-        
-        bool HasNext() const override {
-            return currentIndex < sequence.GetLength();
-        }
-        
-        T Next() override {
-            if (!HasNext()) throw IndexOutOfRange();
-            return sequence.Get(currentIndex++);
-        }
-        
-        void Reset() override {
-            currentIndex = 0;
-        }
-    };
-
-    ListSequence() : list() {}
-    ListSequence(const LinkedList<T>& lst) : list(lst) {}
-    ListSequence(T* items, int count) : list(items, count) {}
-    ListSequence(std::initializer_list<T> initList) : list(initList) {}
-    ListSequence(const ListSequence<T>& other) : list(other.list) {}
-
-    std::unique_ptr<IIterator<T>> CreateIterator() const override {
-        return std::make_unique<Iterator>(*this);
+    // Mutable методы - изменяют текущий объект
+    void AppendInPlace(T item) {
+        this->array.Append(item);
     }
 
-    T GetFirst() const override { return list.GetFirst(); }
-    T GetLast() const override { return list.GetLast(); }
-    T Get(int index) const override { return list.Get(index); }
-    int GetLength() const override { return list.GetLength(); }
+    void PrependInPlace(T item) {
+        this->array.Prepend(item);
+    }
 
-    ListSequence<T>* Append(T item) const override {
-        ListSequence<T>* newSequence = new ListSequence<T>(*this);
-        newSequence->list.Append(item);
+    void InsertAtInPlace(T item, int index) {
+        this->array.InsertAt(item, index);
+    }
+
+    T RemoveAtInPlace(int index) {
+        return this->array.RemoveAt(index);
+    }
+
+    void SetInPlace(int index, T value) {
+        this->array.Set(index, value);
+    }
+
+    // Immutable версии (наследуются от базового класса)
+    MutableArraySequence<T>* Append(T item) const override {
+        MutableArraySequence<T>* newSequence = new MutableArraySequence<T>(*this);
+        newSequence->AppendInPlace(item);
         return newSequence;
     }
 
-    ListSequence<T>* Prepend(T item) const override {
-        ListSequence<T>* newSequence = new ListSequence<T>(*this);
-        newSequence->list.Prepend(item);
+    MutableArraySequence<T>* Prepend(T item) const override {
+        MutableArraySequence<T>* newSequence = new MutableArraySequence<T>(*this);
+        newSequence->PrependInPlace(item);
         return newSequence;
     }
 
-    ListSequence<T>* InsertAt(T item, int index) const override {
-        ListSequence<T>* newSequence = new ListSequence<T>(*this);
-        newSequence->list.InsertAt(item, index);
+    MutableArraySequence<T>* InsertAt(T item, int index) const override {
+        MutableArraySequence<T>* newSequence = new MutableArraySequence<T>(*this);
+        newSequence->InsertAtInPlace(item, index);
         return newSequence;
     }
 
-    ListSequence<T>* GetSubsequence(int startIndex, int endIndex) const override {
-        LinkedList<T>* subList = list.GetSubList(startIndex, endIndex);
-        ListSequence<T>* result = new ListSequence<T>(*subList);
-        delete subList;
-        return result;
+    Sequence<T>* Clone() const override {
+        return new MutableArraySequence<T>(*this);
+    }
+};
+
+// ==================== IMMUTABLE ARRAY SEQUENCE ====================
+template <class T>
+class ImmutableArraySequence : public BaseArraySequence<T> {
+public:
+    using BaseArraySequence<T>::BaseArraySequence;
+
+    // Все операции возвращают новые объекты
+    ImmutableArraySequence<T>* Append(T item) const override {
+        ImmutableArraySequence<T>* newSequence = new ImmutableArraySequence<T>(*this);
+        newSequence->array.Append(item);
+        return newSequence;
     }
 
-    ListSequence<T>* Map(std::function<T(T)> func) const override {
-        ListSequence<T>* result = new ListSequence<T>();
-        for (int i = 0; i < list.GetLength(); i++) {
-            result->list.Append(func(list.Get(i)));
-        }
-        return result;
+    ImmutableArraySequence<T>* Prepend(T item) const override {
+        ImmutableArraySequence<T>* newSequence = new ImmutableArraySequence<T>(*this);
+        newSequence->array.Prepend(item);
+        return newSequence;
     }
 
-    ListSequence<T>* Where(std::function<bool(T)> predicate) const override {
-        ListSequence<T>* result = new ListSequence<T>();
-        for (int i = 0; i < list.GetLength(); i++) {
-            T item = list.Get(i);
-            if (predicate(item)) {
-                result->list.Append(item);
-            }
-        }
-        return result;
+    ImmutableArraySequence<T>* InsertAt(T item, int index) const override {
+        ImmutableArraySequence<T>* newSequence = new ImmutableArraySequence<T>(*this);
+        newSequence->array.InsertAt(item, index);
+        return newSequence;
     }
 
-    T Reduce(std::function<T(T, T)> func, T initial) const override {
-        T result = initial;
-        for (int i = 0; i < list.GetLength(); i++) {
-            result = func(result, list.Get(i));
-        }
-        return result;
+    Sequence<T>* Clone() const override {
+        return new ImmutableArraySequence<T>(*this);
     }
-
-    ListSequence<T>* Zip(const Sequence<T>* other, std::function<T(T, T)> func) const override {
-        ListSequence<T>* result = new ListSequence<T>();
-        int minLength = std::min(list.GetLength(), other->GetLength());
-        for (int i = 0; i < minLength; i++) {
-            result->list.Append(func(list.Get(i), other->Get(i)));
-        }
-        return result;
-    }
-
-    ListSequence<T>* Slice(int startIndex, int deleteCount, const Sequence<T>* insertSequence = nullptr) const override {
-        ListSequence<T>* result = new ListSequence<T>(*this);
-        
-        if (startIndex < 0) startIndex = list.GetLength() + startIndex;
-        if (startIndex < 0 || startIndex >= list.GetLength()) throw IndexOutOfRange();
-        
-        for (int i = 0; i < deleteCount && startIndex < result->list.GetLength(); i++) {
-            result->list.RemoveAt(startIndex);
-        }
-        
-        if (insertSequence != nullptr) {
-            for (int i = insertSequence->GetLength() - 1; i >= 0; i--) {
-                result->list.InsertAt(insertSequence->Get(i), startIndex);
-            }
-        }
-        
-        return result;
-    }
-
-    Option<T> TryGet(int index) const override {
-        if (index < 0 || index >= list.GetLength()) return Option<T>::None();
-        return Option<T>::Some(list.Get(index));
-    }
-
-    Option<T> TryGetFirst() const override {
-        if (list.GetLength() == 0) return Option<T>::None();
-        return Option<T>::Some(list.GetFirst());
-    }
-
-    Option<T> TryGetLast() const override {
-        if (list.GetLength() == 0) return Option<T>::None();
-        return Option<T>::Some(list.GetLast());
-    }
-
-    Option<T> TryFind(std::function<bool(T)> predicate) const override {
-        for (int i = 0; i < list.GetLength(); i++) {
-            T item = list.Get(i);
-            if (predicate(item)) {
-                return Option<T>::Some(item);
-            }
-        }
-        return Option<T>::None();
-    }
-
-    void Print() const override { list.Print(); }
-    T operator[](int index) const override { return list.Get(index); }
-    Sequence<T>* Clone() const override { return new ListSequence<T>(*this); }
 };
 
 // ==================== ТЕСТЫ ====================
+void TestDynamicArray() {
+    std::cout << "\n=== ТЕСТИРОВАНИЕ DYNAMIC ARRAY ===" << std::endl;
+    
+    DynamicArray<int>* arr = new DynamicArray<int>({1, 2, 3, 4, 5});
+    std::cout << "Dynamic Array: ";
+    arr->Print();
+    
+    arr->Append(6);
+    std::cout << "После Append(6): ";
+    arr->Print();
+    
+    arr->Prepend(0);
+    std::cout << "После Prepend(0): ";
+    arr->Print();
+    
+    std::cout << "Элемент по индексу 3: " << arr->Get(3) << std::endl;
+    std::cout << "Размер массива: " << arr->GetSize() << std::endl;
+    
+    // Тест итератора
+    std::cout << "Итератор: ";
+    auto iterator = arr->CreateIterator();
+    while (iterator->HasNext()) {
+        std::cout << iterator->Next() << " ";
+    }
+    std::cout << std::endl;
+    
+    delete arr;
+}
+
 void TestLinkedList() {
     std::cout << "\n=== ТЕСТИРОВАНИЕ LINKED LIST ===" << std::endl;
     
@@ -805,133 +807,209 @@ void TestLinkedList() {
     list->Print();
     
     list->Append(6);
-    std::cout << "After Append(6): ";
+    std::cout << "После Append(6): ";
     list->Print();
     
     list->Prepend(0);
-    std::cout << "After Prepend(0): ";
+    std::cout << "После Prepend(0): ";
     list->Print();
     
     LinkedList<int>* subList = list->GetSubList(2, 4);
-    std::cout << "SubList [2:4]: ";
+    std::cout << "Подсписок [2:4]: ";
     subList->Print();
+    
+    std::cout << "Первый элемент: " << list->GetFirst() << std::endl;
+    std::cout << "Последний элемент: " << list->GetLast() << std::endl;
+    std::cout << "Элемент по индексу 3: " << list->Get(3) << std::endl;
+    
+    // Тест итератора
+    std::cout << "Итератор: ";
+    auto iterator = list->CreateIterator();
+    while (iterator->HasNext()) {
+        std::cout << iterator->Next() << " ";
+    }
+    std::cout << std::endl;
     
     delete list;
     delete subList;
 }
 
-void TestListSequence() {
-    std::cout << "\n=== ТЕСТИРОВАНИЕ LIST SEQUENCE ===" << std::endl;
+void TestMutableSequence() {
+    std::cout << "\n=== ТЕСТИРОВАНИЕ MUTABLE SEQUENCE ===" << std::endl;
     
-    ListSequence<int>* seq = new ListSequence<int>({1, 2, 3, 4, 5});
-    std::cout << "List Sequence: ";
-    seq->Print();
+    MutableArraySequence<int>* mutableSeq = new MutableArraySequence<int>({1, 2, 3});
+    std::cout << "Mutable Sequence: ";
+    mutableSeq->Print();
     
-    Sequence<int>* doubled = seq->Map([](int x) { return x * 2; });
-    std::cout << "Map (x * 2): ";
-    doubled->Print();
+    // Изменяем оригинальный объект
+    mutableSeq->AppendInPlace(4);
+    std::cout << "После AppendInPlace(4): ";
+    mutableSeq->Print();
     
-    Sequence<int>* evens = seq->Where([](int x) { return x % 2 == 0; });
-    std::cout << "Where (even): ";
-    evens->Print();
+    mutableSeq->SetInPlace(1, 99);
+    std::cout << "После SetInPlace(1, 99): ";
+    mutableSeq->Print();
     
-    delete seq;
-    delete doubled;
-    delete evens;
+    // Immutable операция возвращает новый объект
+    MutableArraySequence<int>* newMutable = mutableSeq->Append(5);
+    std::cout << "После Append(5) - новый объект: ";
+    newMutable->Print();
+    std::cout << "Оригинал неизменен: ";
+    mutableSeq->Print();
+    
+    // Тест Clone
+    MutableArraySequence<int>* cloned = dynamic_cast<MutableArraySequence<int>*>(mutableSeq->Clone());
+    std::cout << "Клонированная последовательность: ";
+    cloned->Print();
+    
+    delete mutableSeq;
+    delete newMutable;
+    delete cloned;
 }
 
-void TestArraySequence() {
-    std::cout << "\n=== ТЕСТИРОВАНИЕ ARRAY SEQUENCE ===" << std::endl;
+void TestImmutableSequence() {
+    std::cout << "\n=== ТЕСТИРОВАНИЕ IMMUTABLE SEQUENCE ===" << std::endl;
     
-    ArraySequence<int>* seq = new ArraySequence<int>({1, 2, 3, 4, 5});
-    std::cout << "Array Sequence: ";
-    seq->Print();
+    ImmutableArraySequence<int>* immutableSeq = new ImmutableArraySequence<int>({1, 2, 3});
+    std::cout << "Immutable Sequence: ";
+    immutableSeq->Print();
     
-    Sequence<int>* sliced = seq->Slice(1, 2);
-    std::cout << "Slice(1, 2): ";
-    sliced->Print();
+    // Все операции возвращают новые объекты
+    ImmutableArraySequence<int>* newImmutable = immutableSeq->Append(4);
+    std::cout << "После Append(4) - новый объект: ";
+    newImmutable->Print();
+    std::cout << "Оригинал неизменен: ";
+    immutableSeq->Print();
     
-    delete seq;
-    delete sliced;
+    ImmutableArraySequence<int>* anotherImmutable = newImmutable->Prepend(0);
+    std::cout << "После Prepend(0) - ещё один новый объект: ";
+    anotherImmutable->Print();
+    std::cout << "Предыдущий неизменен: ";
+    newImmutable->Print();
+    std::cout << "Оригинал всё ещё неизменен: ";
+    immutableSeq->Print();
+    
+    // Тестирование Map-Reduce
+    Sequence<int>* mapped = anotherImmutable->Map([](int x) { return x * 2; });
+    std::cout << "После Map(x * 2): ";
+    mapped->Print();
+    
+    int sum = anotherImmutable->Reduce([](int a, int b) { return a + b; }, 0);
+    std::cout << "Reduce (сумма): " << sum << std::endl;
+    
+    // Тест Clone
+    ImmutableArraySequence<int>* cloned = dynamic_cast<ImmutableArraySequence<int>*>(immutableSeq->Clone());
+    std::cout << "Клонированная последовательность: ";
+    cloned->Print();
+    
+    delete immutableSeq;
+    delete newImmutable;
+    delete anotherImmutable;
+    delete mapped;
+    delete cloned;
 }
 
 void TestTrySemantics() {
     std::cout << "\n=== ТЕСТИРОВАНИЕ TRY-СЕМАНТИКИ ===" << std::endl;
     
-    ListSequence<int>* seq = new ListSequence<int>({1, 2, 3, 4, 5});
+    ImmutableArraySequence<int>* seq = new ImmutableArraySequence<int>({1, 2, 3, 4, 5});
     
     Option<int> found = seq->TryFind([](int x) { return x > 3; });
     if (found.IsSome()) {
-        std::cout << "Found: " << found.GetValue() << std::endl;
+        std::cout << "Найден элемент > 3: " << found.GetValue() << std::endl;
+    } else {
+        std::cout << "Элемент > 3 не найден" << std::endl;
     }
+    
+    Option<int> notFound = seq->TryFind([](int x) { return x > 10; });
+    std::cout << "Поиск элемента > 10: " << (notFound.IsNone() ? "Не найден" : "Найден") << std::endl;
     
     Option<int> first = seq->TryGetFirst();
     Option<int> last = seq->TryGetLast();
+    Option<int> element = seq->TryGet(2);
+    Option<int> invalid = seq->TryGet(10);
     
-    if (first.IsSome()) std::cout << "First: " << first.GetValue() << std::endl;
-    if (last.IsSome()) std::cout << "Last: " << last.GetValue() << std::endl;
+    if (first.IsSome()) std::cout << "Первый элемент: " << first.GetValue() << std::endl;
+    if (last.IsSome()) std::cout << "Последний элемент: " << last.GetValue() << std::endl;
+    if (element.IsSome()) std::cout << "Элемент по индексу 2: " << element.GetValue() << std::endl;
+    if (invalid.IsNone()) std::cout << "Элемент по индексу 10: Не существует" << std::endl;
     
     delete seq;
-}
-
-// ==================== UI ====================
-void ShowMainMenu() {
-    std::cout << "\n=== ГЛАВНОЕ МЕНЮ ===" << std::endl;
-    std::cout << "1. Тестирование Linked List" << std::endl;
-    std::cout << "2. Тестирование Array Sequence" << std::endl;
-    std::cout << "3. Тестирование List Sequence" << std::endl;
-    std::cout << "4. Тестирование Try-семантики" << std::endl;
-    std::cout << "5. Запуск всех тестов" << std::endl;
-    std::cout << "6. Демонстрация Map-Reduce" << std::endl;
-    std::cout << "7. Демонстрация Slice" << std::endl;
-    std::cout << "0. Выход" << std::endl;
-    std::cout << "Выберите опцию: ";
 }
 
 void DemoMapReduce() {
     std::cout << "\n=== ДЕМОНСТРАЦИЯ MAP-REDUCE ===" << std::endl;
     
-    ListSequence<int>* seq = new ListSequence<int>({1, 2, 3, 4, 5});
+    ImmutableArraySequence<int>* seq = new ImmutableArraySequence<int>({1, 2, 3, 4, 5});
     std::cout << "Исходная последовательность: ";
     seq->Print();
     
-    // Map
-    Sequence<int>* squared = seq->Map([](int x) { return x * x; });
-    std::cout << "Map (x²): ";
-    squared->Print();
+    // Цепочка Map-Reduce операций
+    Sequence<int>* processed = seq->Map([](int x) { return x + 10; })
+                              ->Where([](int x) { return x % 2 == 0; })
+                              ->Map([](int x) { return x * 2; });
     
-    // Where
-    Sequence<int>* greaterThan2 = seq->Where([](int x) { return x > 2; });
-    std::cout << "Where (x > 2): ";
-    greaterThan2->Print();
+    std::cout << "После цепочки Map->Where->Map: ";
+    processed->Print();
     
-    // Reduce
-    int sum = seq->Reduce([](int a, int b) { return a + b; }, 0);
-    std::cout << "Reduce (sum): " << sum << std::endl;
+    int finalResult = processed->Reduce([](int a, int b) { return a + b; }, 0);
+    std::cout << "Финальный результат Reduce: " << finalResult << std::endl;
     
     delete seq;
-    delete squared;
-    delete greaterThan2;
+    delete processed;
 }
 
 void DemoSlice() {
     std::cout << "\n=== ДЕМОНСТРАЦИЯ SLICE ===" << std::endl;
     
-    ArraySequence<int>* seq = new ArraySequence<int>({1, 2, 3, 4, 5});
-    ArraySequence<int>* insert = new ArraySequence<int>({9, 10});
+    ImmutableArraySequence<int>* seq = new ImmutableArraySequence<int>({1, 2, 3, 4, 5, 6, 7, 8});
+    ImmutableArraySequence<int>* insertSeq = new ImmutableArraySequence<int>({99, 100});
     
-    std::cout << "Исходная: ";
+    std::cout << "Исходная последовательность: ";
     seq->Print();
-    std::cout << "Для вставки: ";
-    insert->Print();
+    std::cout << "Последовательность для вставки: ";
+    insertSeq->Print();
     
-    Sequence<int>* sliced = seq->Slice(1, 2, insert);
-    std::cout << "Slice(1, 2, {9,10}): ";
+    // Slice с вставкой
+    Sequence<int>* sliced = seq->Slice(2, 3, insertSeq);
+    std::cout << "Slice(2, 3, {99,100}): ";
     sliced->Print();
     
+    // Slice с отрицательным индексом
+    Sequence<int>* negativeSlice = seq->Slice(-3, 2);
+    std::cout << "Slice(-3, 2): ";
+    negativeSlice->Print();
+    
     delete seq;
-    delete insert;
+    delete insertSeq;
     delete sliced;
+    delete negativeSlice;
+}
+
+void RunAllTests() {
+    std::cout << "=== ЗАПУСК ВСЕХ ТЕСТОВ ===" << std::endl;
+    TestDynamicArray();
+    TestLinkedList();
+    TestMutableSequence();
+    TestImmutableSequence();
+    TestTrySemantics();
+    DemoMapReduce();
+    DemoSlice();
+}
+
+// ==================== ПОЛЬЗОВАТЕЛЬСКИЙ ИНТЕРФЕЙС ====================
+void ShowMainMenu() {
+    std::cout << "\n=== ГЛАВНОЕ МЕНЮ ===" << std::endl;
+    std::cout << "1. Тестирование Dynamic Array" << std::endl;
+    std::cout << "2. Тестирование Linked List" << std::endl;
+    std::cout << "3. Тестирование Mutable Sequence" << std::endl;
+    std::cout << "4. Тестирование Immutable Sequence" << std::endl;
+    std::cout << "5. Тестирование Try-семантики" << std::endl;
+    std::cout << "6. Запуск всех тестов" << std::endl;
+    std::cout << "7. Демонстрация Map-Reduce" << std::endl;
+    std::cout << "8. Демонстрация Slice" << std::endl;
+    std::cout << "0. Выход" << std::endl;
+    std::cout << "Выберите опцию: ";
 }
 
 void RunUI() {
@@ -941,18 +1019,14 @@ void RunUI() {
         std::cin >> choice;
         
         switch (choice) {
-            case 1: TestLinkedList(); break;
-            case 2: TestArraySequence(); break;
-            case 3: TestListSequence(); break;
-            case 4: TestTrySemantics(); break;
-            case 5: 
-                TestLinkedList();
-                TestArraySequence();
-                TestListSequence();
-                TestTrySemantics();
-                break;
-            case 6: DemoMapReduce(); break;
-            case 7: DemoSlice(); break;
+            case 1: TestDynamicArray(); break;
+            case 2: TestLinkedList(); break;
+            case 3: TestMutableSequence(); break;
+            case 4: TestImmutableSequence(); break;
+            case 5: TestTrySemantics(); break;
+            case 6: RunAllTests(); break;
+            case 7: DemoMapReduce(); break;
+            case 8: DemoSlice(); break;
             case 0: std::cout << "Выход..." << std::endl; break;
             default: std::cout << "Неверный выбор!" << std::endl;
         }
@@ -962,7 +1036,7 @@ void RunUI() {
 // ==================== MAIN ====================
 int main() {
     std::cout << "Лабораторная работа №2 - Полная реализация" << std::endl;
-    std::cout << "Включает: Linked List, Array Sequence, List Sequence" << std::endl;
+    std::cout << "Система для работы с коллекциями данных" << std::endl;
     
     try {
         RunUI();
